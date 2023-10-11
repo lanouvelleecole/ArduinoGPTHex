@@ -28,6 +28,7 @@ import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 import ArduinoUploader.ArduinoSketchUploader;
@@ -48,6 +49,8 @@ public class MainActivity extends AppCompatActivity {
         CONNECT
     }
 
+    private UsbConnectState usbStatus;
+
     private final BroadcastReceiver mUsbNotifyReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -64,10 +67,16 @@ public class MainActivity extends AppCompatActivity {
                     break;
                 case UsbSerialManager.ACTION_USB_DISCONNECTED: // USB DISCONNECTED
                     Toast.makeText(context, "USB disconnected", Toast.LENGTH_SHORT).show();
+
+                    usbStatus = UsbConnectState.DISCONNECTED;
+
                     usbConnectChange(UsbConnectState.DISCONNECTED);
                     break;
                 case UsbSerialManager.ACTION_USB_CONNECT: // USB DISCONNECTED
                     Toast.makeText(context, "USB connected", Toast.LENGTH_SHORT).show();
+
+                    usbStatus = UsbConnectState.CONNECT;
+
                     usbConnectChange(UsbConnectState.CONNECT);
                     break;
                 case UsbSerialManager.ACTION_USB_NOT_SUPPORTED: // USB NOT SUPPORTED
@@ -125,7 +134,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView portSelect;
     private String deviceKeyName;
     private FloatingActionButton fab;
-    private Button requestButton;
 
     private File tempHexFile; // Store the temporary HEX file
 
@@ -149,10 +157,10 @@ public class MainActivity extends AppCompatActivity {
 
     public void usbConnectChange(UsbConnectState state) {
         if (state == UsbConnectState.DISCONNECTED) {
-            if (requestButton != null) requestButton.setVisibility(View.INVISIBLE);
-            if (fab != null) fab.hide();
+            //if (requestButton != null) requestButton.setVisibility(View.INVISIBLE);
+            //if (fab != null) fab.hide();
         } else if (state == UsbConnectState.CONNECT) {
-            if (requestButton != null) requestButton.setVisibility(View.VISIBLE);
+            //if (requestButton != null) requestButton.setVisibility(View.VISIBLE);
 
         }
 
@@ -161,9 +169,9 @@ public class MainActivity extends AppCompatActivity {
 
     public void usbPermissionGranted(String usbKey) {
         Toast.makeText(this, "UsbPermissionGranted:" + usbKey, Toast.LENGTH_SHORT).show();
-        portSelect.setText(usbKey);
+        //portSelect.setText(usbKey);
         deviceKeyName = usbKey;
-        if (fab != null) fab.show();
+        //if (fab != null) fab.show();
     }
 
     @Override
@@ -185,32 +193,42 @@ public class MainActivity extends AppCompatActivity {
         portSelect = (TextView) findViewById(R.id.textViewTitle);
         display = (TextView) findViewById(R.id.textView1);
         fab = findViewById(R.id.fab);
-        requestButton = (Button) findViewById(R.id.buttonRequest);
 
         // Check if this Activity was started by another app with a HEX string
         HandleDeepLink();
 
-        requestButton.setOnClickListener(view -> {
-            Map.Entry<String, UsbDevice> entry = usbSerialManager.getUsbDeviceList().entrySet().iterator().next();
-            String keySelect = entry.getKey();
-            boolean hasPem = checkDevicePermission(keySelect);
-            if (hasPem) {
-                portSelect.setText(keySelect);
-                deviceKeyName = keySelect;
-                if (fab != null) fab.show();
+        // Check USB connection status
+        UsbManager usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        HashMap<String, UsbDevice> usbDevices = usbManager.getDeviceList();
+        if (usbDevices.isEmpty()) {
+            usbStatus = UsbConnectState.DISCONNECTED;
+        } else {
+            usbStatus = UsbConnectState.CONNECT;
+        }
+
+        fab.setOnClickListener(view -> {
+            boolean devicePlugged = usbStatus == UsbConnectState.CONNECT;
+
+            if (!devicePlugged) {
+                Toast.makeText(this, "No Arduino device is plugged. Plug an Arduino device, via USB, and try again", Toast.LENGTH_LONG).show();
             } else {
-                requestDevicePermission(keySelect);
+                Map.Entry<String, UsbDevice> entry = usbSerialManager.getUsbDeviceList().entrySet().iterator().next();
+                String keySelect = entry.getKey();
+                boolean hasPem = checkDevicePermission(keySelect);
+
+                if (!hasPem) {
+                    requestDevicePermission(keySelect);
+
+                    Toast.makeText(this, "Let's allow the Arduino device USB, before installation", Toast.LENGTH_LONG).show();
+                } else {
+                    deviceKeyName = keySelect;
+
+                    uploadHex();
+                }
             }
         });
 
-
-        fab.setOnClickListener(view -> {
-            //Toast.makeText(this, ";-)", Toast.LENGTH_LONG).show();
-            uploadHex();
-            //new Thread(new UploadRunnable()).start();
-        });
-
-
+        fab.show();
     }
 
     private void HandleDeepLink() {
@@ -400,7 +418,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
+        //getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
     }
 
